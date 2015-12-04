@@ -10,7 +10,7 @@
 #import "BruteForceCoding.h"
 #import "LeafNotification.h"
 //自己设定
-#define HOST @"msg.ariesgames.net"
+#define HOST @"127.0.0.1"
 #define PORT 8080
 
 //设置连接超时
