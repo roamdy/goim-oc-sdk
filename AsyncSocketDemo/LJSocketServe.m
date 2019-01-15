@@ -8,10 +8,10 @@
 
 #import "LJSocketServe.h"
 #import "BruteForceCoding.h"
-#import "LeafNotification.h"
+//#import "LeafNotification.h"
 //自己设定
 #define HOST @"127.0.0.1"
-#define PORT 8080
+#define PORT 3101
 
 //设置连接超时
 #define TIME_OUT 20
@@ -103,14 +103,47 @@ static LJSocketServe *socketServe = nil;
 //发送认证消息
 -(BOOL)authWrite{
 
-    int gameCode = [self getGameCode:@"liangshan"];
-    NSString *stringGameCode = [NSString stringWithFormat:@"%d",gameCode];
-    self.uid = 1;
-    NSString *uidString = [NSString stringWithFormat:@"%ld",self.uid];
-    NSString *msg = [NSString stringWithFormat:@"%@,%@",uidString,stringGameCode];
-    NSData *msgData = [msg dataUsingEncoding:NSUTF8StringEncoding];
-    Byte *msgByte = (Byte *)[msgData bytes];
-    unsigned long packLength = msg.length + 16;
+//    int gameCode = [self getGameCode:@"liangshan"];
+//    NSString *stringGameCode = [NSString stringWithFormat:@"%d",gameCode];
+//    self.uid = 1;
+//    NSString *uidString = [NSString stringWithFormat:@"%ld",self.uid];
+//    NSString *msg = [NSString stringWithFormat:@"%@,%@",uidString,stringGameCode];
+    
+//    type AuthToken struct {
+//        Mid      int64   `json:"mid"`
+//        Key      string  `json:"key"`
+//        RoomID   string  `json:"room_id"`
+//        Platform string  `json:"platform"`
+//        Accepts  []int32 `json:"accepts"`
+//    }
+    
+//    '{"mid":123, "room_id":"live://1000", "platform":"web", "accepts":[1000,1001,1002]}'
+    
+    
+    
+    NSMutableDictionary *authToken = [NSMutableDictionary dictionaryWithObjectsAndKeys:@123,@"mid",@"live://1000",@"room_id",@"web",@"platform",@[@1000, @1001, @1002],@"accepts", nil];
+    
+    NSError *error;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:authToken
+                                                       options:NSJSONWritingPrettyPrinted // Pass 0 if you don't care about the readability of the generated string
+                                                         error:&error];
+    
+    
+    // 字段串转 byte
+    Byte *msgByte = (Byte *)[jsonData bytes];
+    
+    // proto总长度
+    unsigned long packLength =[jsonData length] + 16;
+    
+    
+//    type Proto struct {
+//        PackLen   int32  // package length
+//        HeaderLen int16  // header length
+//        Ver       int16  // protocol version
+//        Operation int32  // operation for request
+//        Seq       int32  // sequence number chosen by client
+//        Body      []byte // body
+//    }
     
     Byte baotou[16] ;
     BruteForceCoding *brute = [[BruteForceCoding alloc]init];
@@ -118,21 +151,26 @@ static LJSocketServe *socketServe = nil;
     //package length
     int offset = [brute encodeIntBigEndian:baotou val:packLength offset:0 size:4];
     
-    //header length
+    //header proto头固定16
     offset = [brute encodeIntBigEndian:baotou val:16 offset:offset size:2];
     
-    //ver
-    offset = [brute encodeIntBigEndian:baotou val:2 offset:offset size:2];
+    //ver 版本号1
+    offset = [brute encodeIntBigEndian:baotou val:1 offset:offset size:2];
     
-    //operation
+    //operation 验证op == 7
     offset = [brute encodeIntBigEndian:baotou val:7 offset:offset size:4];
 
-    //jsonp callback
-    offset = [brute encodeIntBigEndian:baotou val:2 offset:offset size:4];
+    // eq 0
+    offset = [brute encodeIntBigEndian:baotou val:0 offset:offset size:4];
+    
+    
+    
     //移位后结果转化成NSData发送到服务器进行认证
     NSInteger baotouLength = sizeof(baotou);
-    NSInteger msgLength = [msgData length];
-    Byte *resultByte = [brute addByte1:baotou andLength:baotouLength andByte2:msgByte andLength:msgLength];
+    NSInteger msgLength = [jsonData length];
+    // 添加auth 数据到
+    Byte *resultByte = [brute addByte1:baotou andLength:baotouLength andByte2:msgByte andLength:[jsonData length]];
+    
     NSData *data = [NSData dataWithBytes:resultByte length:baotouLength + msgLength];
     [self.socket writeData:data withTimeout:TIME_OUT tag:101];
     NSLog(@"-----------------------认证消息数据发送成功");
@@ -144,20 +182,21 @@ static LJSocketServe *socketServe = nil;
 //发送心跳
 -(BOOL)heartBeatWrite{
 
-    int gameCode = [self getGameCode:@"liangshan"];
-    NSString *stringGameCode = [NSString stringWithFormat:@"%d",gameCode];
-    self.uid = 1;
-    NSString *uidString = [NSString stringWithFormat:@"%ld",self.uid];
-    NSString *msg = [NSString stringWithFormat:@"%@,%@",uidString,stringGameCode];
-    NSData *msgData = [msg dataUsingEncoding:NSUTF8StringEncoding];
-    Byte *msgByte = (Byte *)[msgData bytes];
-    unsigned long packLength = msg.length + 16;
+//    int gameCode = [self getGameCode:@"liangshan"];
+//    NSString *stringGameCode = [NSString stringWithFormat:@"%d",gameCode];
+//    self.uid = 1;
+//    NSString *uidString = [NSString stringWithFormat:@"%ld",self.uid];
+//    NSString *msg = [NSString stringWithFormat:@"%@,%@",uidString,stringGameCode];
+//    NSData *msgData = [msg dataUsingEncoding:NSUTF8StringEncoding];
+//    Byte *msgByte = (Byte *)[msgData bytes];
+//    unsigned long packLength = msg.length + 16;
+//
     
     Byte baotou[16] ;
     BruteForceCoding *brute = [[BruteForceCoding alloc]init];
     //移位
-    //package length
-    int offset = [brute encodeIntBigEndian:baotou val:packLength offset:0 size:4];
+    //package 心跳包body为空，所以长度为16,只发header
+    int offset = [brute encodeIntBigEndian:baotou val:16 offset:0 size:4];
     
     //header length
     offset = [brute encodeIntBigEndian:baotou val:16 offset:offset size:2];
@@ -165,16 +204,15 @@ static LJSocketServe *socketServe = nil;
     //ver
     offset = [brute encodeIntBigEndian:baotou val:1 offset:offset size:2];
     
-    //operation
+    //operation heartbeatOP == 2
     offset = [brute encodeIntBigEndian:baotou val:2 offset:offset size:4];
     
     //jsonp callback
     offset = [brute encodeIntBigEndian:baotou val:1 offset:offset size:4];
+    
     //移位后结果转化成NSData发送到服务器进行认证
     NSInteger baotouLength = sizeof(baotou);
-    NSInteger msgLength = [msgData length];
-    Byte *resultByte = [brute addByte1:baotou andLength:baotouLength andByte2:msgByte andLength:msgLength];
-    NSData *data = [NSData dataWithBytes:resultByte length:baotouLength + msgLength];
+    NSData *data = [NSData dataWithBytes:baotou length:baotouLength];
     [self.socket writeData:data withTimeout:TIME_OUT tag:101];
     NSLog(@"-----------------------心跳消息发送数据成功");
     return YES;
@@ -285,14 +323,14 @@ static LJSocketServe *socketServe = nil;
             [self.heartTimer fire];
             
 
-        } else if (5 == operation) {
+        } else if (4 == operation) {
             //解析出body内容
             NSData *data = [NSData dataWithBytes:resultByte length:dataLength - 16];
             NSString *string = [[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
             
 //            self.block(string);
             
-            [LeafNotification showInController:[[UIApplication sharedApplication]keyWindow].rootViewController withText:string];
+//            [LeafNotification showInController:[[UIApplication sharedApplication]keyWindow].rootViewController withText:string];
             NSLog(@"%@",string);
         }
         
